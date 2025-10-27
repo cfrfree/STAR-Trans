@@ -3,7 +3,11 @@ import torch.nn as nn
 from timm.models.layers import trunc_normal_
 
 from .backbones.resnet import ResNet, Bottleneck
+
+# 1. 导入ViT和Swin-T的TransOSS模型
 from .backbones.vit_transoss import vit_base_patch16_224_TransOSS, vit_large_patch16_224_TransOSS, PatchEmbed_overlap, WHPatchEmbedding
+from .backbones.swin_transoss import swin_tiny_patch4_224_TransOSS, swin_base_patch4_224_TransOSS  # <--- 新增导入
+
 from loss.metric_learning import Arcface, Cosface, AMSoftmax, CircleLoss
 
 
@@ -102,14 +106,11 @@ class Backbone(nn.Module):
 class build_transformer(nn.Module):
     def __init__(self, num_classes, camera_num, cfg, factory, logit_scale_init_value=2.6592):
         super(build_transformer, self).__init__()
-        last_stride = cfg.MODEL.LAST_STRIDE
         model_path = cfg.MODEL.PRETRAIN_PATH
-        model_name = cfg.MODEL.NAME
         pretrain_choice = cfg.MODEL.PRETRAIN_CHOICE
         self.cos_layer = cfg.MODEL.COS_LAYER
         self.neck = cfg.MODEL.NECK
         self.neck_feat = cfg.TEST.NECK_FEAT
-        # self.in_planes = 768
         self.model_type = cfg.MODEL.TRANSFORMER_TYPE
 
         print("using Transformer_type: {} as a backbone".format(cfg.MODEL.TRANSFORMER_TYPE))
@@ -118,19 +119,30 @@ class build_transformer(nn.Module):
             camera_num = camera_num
         else:
             camera_num = 0
-        if cfg.MODEL.TRANSFORMER_TYPE in ["vit_base_patch16_224_TransOSS", "vit_large_patch16_224_TransOSS"]:
+
+        # 2. --- 修改模型构建逻辑 ---
+        if cfg.MODEL.TRANSFORMER_TYPE not in factory:
+            raise ValueError("Unsupported model type: {}".format(cfg.MODEL.TRANSFORMER_TYPE))
+
+        if "vit" in cfg.MODEL.TRANSFORMER_TYPE:
+            # ViT-specific arguments
+            print("Building ViT-TransOSS model...")
             self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](
                 img_size=cfg.INPUT.SIZE_TRAIN,
                 mie_coe=cfg.MODEL.MIE_COE,
                 camera=camera_num,
-                stride_size=cfg.MODEL.STRIDE_SIZE,
+                stride_size=cfg.MODEL.STRIDE_SIZE,  # ViT 需要 stride_size
                 drop_path_rate=cfg.MODEL.DROP_PATH,
                 drop_rate=cfg.MODEL.DROP_OUT,
                 attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
                 sse=cfg.MODEL.SSE,
             )
+        elif "swin" in cfg.MODEL.TRANSFORMER_TYPE:
+            # Swin-specific arguments
+            print("Building Swin-TransOSS model...")
+            self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](cfg=cfg, camera_num=camera_num)
         else:
-            raise ValueError("Unsupported model type: {}".format(cfg.MODEL.TRANSFORMER_TYPE))
+            raise ValueError("Unknown Transformer type logic")
 
         self.in_planes = self.base.embed_dim
 
@@ -230,17 +242,18 @@ class build_transformer(nn.Module):
 __factory_T_type = {
     "vit_base_patch16_224_TransOSS": vit_base_patch16_224_TransOSS,
     "vit_large_patch16_224_TransOSS": vit_large_patch16_224_TransOSS,
+    "swin_tiny_patch4_224_TransOSS": swin_tiny_patch4_224_TransOSS,  # <--- 新增
+    "swin_base_patch4_224_TransOSS": swin_base_patch4_224_TransOSS,  # <--- 新增
 }
 
 
 def make_model(cfg, num_class, camera_num):
     if cfg.MODEL.NAME == "transformer":
-        if "vit" in cfg.MODEL.TRANSFORMER_TYPE:
-            # print(f"=========== Building ViT-TransOSS: {cfg.MODEL.TRANSFORMER_TYPE} ===========")
+        # 4. --- 修改这里的逻辑 ---
+        if cfg.MODEL.TRANSFORMER_TYPE in __factory_T_type:
             model = build_transformer(num_class, camera_num, cfg, __factory_T_type)
         else:
             raise ValueError(f"Unsupported Transformer type: {cfg.MODEL.TRANSFORMER_TYPE}")
     else:
         model = Backbone(num_class, cfg)
-        # print("=========== Building ResNet ===========")
     return model

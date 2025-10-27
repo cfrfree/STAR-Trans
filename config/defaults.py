@@ -50,40 +50,12 @@ _C.MODEL.ATT_DROP_RATE = 0.0
 _C.MODEL.TRANSFORMER_TYPE = "None"
 _C.MODEL.STRIDE_SIZE = [16, 16]
 
-# Swin Transformer setting
-_C.MODEL.SWIN = CN()
-_C.MODEL.SWIN.PATCH_SIZE = 4
-_C.MODEL.SWIN.WINDOW_SIZE = 7
-_C.MODEL.SWIN.EMBED_DIM = 96
-_C.MODEL.SWIN.DEPTHS = [2, 2, 6, 2]
-_C.MODEL.SWIN.NUM_HEADS = [3, 6, 12, 24]
-
-# MAE setting
-_C.MODEL.MAE_MASK_RATIO = 0.75
-_C.MODEL.MAE_ENCODER_DIM = 768
-_C.MODEL.MAE_ENCODER_DEPTH = 12
-_C.MODEL.MAE_ENCODER_NUM_HEADS = 12
-_C.MODEL.MAE_DECODER_DIM = 512
-_C.MODEL.MAE_DECODER_DEPTH = 8
-_C.MODEL.MAE_DECODER_NUM_HEADS = 16
-
-# ==================== 在这里添加以下代码 ====================
-# SimSiam setting
-_C.MODEL.SIMSIAM_DIM = 768
-_C.MODEL.SIMSIAM_PROJ_HIDDEN_DIM = 2048
-_C.MODEL.SIMSIAM_PRED_HIDDEN_DIM = 512
-_C.MODEL.SIMSIAM_ENCODER_DEPTH = 12
-_C.MODEL.SIMSIAM_ENCODER_HEADS = 12
-# ==========================================================
-
 
 # Modality Information Embeddings
 _C.MODEL.MIE_COE = 3.0
 _C.MODEL.MIE = False
-
 # Ship Size Embeddings
 _C.MODEL.SSE = False
-
 # Pretrain with images pairs
 _C.MODEL.PAIR = False
 
