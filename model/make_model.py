@@ -6,7 +6,6 @@ from .backbones.resnet import ResNet, Bottleneck
 
 # 1. 导入ViT和Swin-T的TransOSS模型
 from .backbones.vit_transoss import vit_base_patch16_224_TransOSS, vit_large_patch16_224_TransOSS, PatchEmbed_overlap, WHPatchEmbedding
-from .backbones.swin_transoss import swin_tiny_patch4_224_TransOSS, swin_base_patch4_224_TransOSS  # <--- 新增导入
 
 from loss.metric_learning import Arcface, Cosface, AMSoftmax, CircleLoss
 
@@ -137,10 +136,6 @@ class build_transformer(nn.Module):
                 attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
                 sse=cfg.MODEL.SSE,
             )
-        elif "swin" in cfg.MODEL.TRANSFORMER_TYPE:
-            # Swin-specific arguments
-            print("Building Swin-TransOSS model...")
-            self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](cfg=cfg, camera_num=camera_num)
         else:
             raise ValueError("Unknown Transformer type logic")
 
@@ -242,8 +237,6 @@ class build_transformer(nn.Module):
 __factory_T_type = {
     "vit_base_patch16_224_TransOSS": vit_base_patch16_224_TransOSS,
     "vit_large_patch16_224_TransOSS": vit_large_patch16_224_TransOSS,
-    "swin_tiny_patch4_224_TransOSS": swin_tiny_patch4_224_TransOSS,  # <--- 新增
-    "swin_base_patch4_224_TransOSS": swin_base_patch4_224_TransOSS,  # <--- 新增
 }
 
 
