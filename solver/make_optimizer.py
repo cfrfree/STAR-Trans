@@ -15,6 +15,12 @@ def make_optimizer(cfg, model, center_criterion):
             if "classifier" in key or "arcface" in key:
                 lr = cfg.SOLVER.BASE_LR * 2
                 print("Using two times learning rate for fc ")
+        if cfg.SOLVER.LARGE_FC_LR:
+            # === 修改处：增加对 CMT 分类器的匹配 ===
+            # 假设你在 CMTModule 里把分类器命名为 'classifiers'
+            if "classifier" in key or "arcface" in key or "classifiers" in key:
+                lr = cfg.SOLVER.BASE_LR * 2
+                print(f"Using two times learning rate for fc: {key}")
 
         params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
 

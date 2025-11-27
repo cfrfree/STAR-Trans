@@ -1,6 +1,6 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
-  PRETRAIN_PATH: /home/chenfree2002/Python/Hoss-ReID/logs/pretrain_base/transformer_60.pth
+  PRETRAIN_PATH: /home/share/chenfree/ReID/jx_vit_base_p16_224-80ecf9dd.pth
   METRIC_LOSS_TYPE: 'triplet'
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
@@ -13,6 +13,9 @@ MODEL:
   MIE_COE: 3.0
   SSE: True
   PAIR: False
+  USE_CMT: True
+  CMT_NUM_PARTS: 2        # 舰船建议 4-6
+  CYC_LOSS_WEIGHT: 0.1    # 建议从 0.1 或 0.2 开始尝试
 
 INPUT:
   SIZE_TRAIN: [256, 128]
@@ -40,7 +43,7 @@ SOLVER:
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
   CHECKPOINT_PERIOD: 10
-  LOG_PERIOD: 80
+  LOG_PERIOD: 50
   EVAL_PERIOD: 10
   WEIGHT_DECAY:  1e-4
   WEIGHT_DECAY_BIAS: 1e-4
@@ -49,8 +52,8 @@ SOLVER:
 TEST:
   IMS_PER_BATCH: 256
   RE_RANKING: False
-  WEIGHT: 'logs/hoss_transoss_base/transformer_200.pth'
+  WEIGHT: 'logs/hoss_transoss_CMT_07/transformer_200.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
-OUTPUT_DIR: './logs/hoss_transoss_base'
+OUTPUT_DIR: './logs/hoss_transoss_CMT_07'

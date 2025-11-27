@@ -389,8 +389,15 @@ class TransOSS(nn.Module):
                 x = blk(x)
 
             x = self.norm(x)
-
-            return x[:, 0]
+            if hasattr(self, "wh_embed"):
+                # 如果有 SSE，序列结构是 [CLS, Patch_0...Patch_N, WH]
+                # x[:, 0] 是 CLS
+                # x[:, 1:-1] 是纯净的 Spatial Patches (去掉了头部的CLS和尾部的WH)
+                return x[:, 0], x[:, 1:-1]
+            else:
+                # 如果没有 SSE，序列结构是 [CLS, Patch_0...Patch_N]
+                # x[:, 1:] 是纯净的 Spatial Patches
+                return x[:, 0], x[:, 1:]
 
     def forward(self, x, cam_label=None, img_wh=None):
         x = self.forward_features(x, cam_label, img_wh)

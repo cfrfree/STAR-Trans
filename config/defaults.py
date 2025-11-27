@@ -49,7 +49,9 @@ _C.MODEL.DROP_OUT = 0.0
 _C.MODEL.ATT_DROP_RATE = 0.0
 _C.MODEL.TRANSFORMER_TYPE = "None"
 _C.MODEL.STRIDE_SIZE = [16, 16]
-
+_C.MODEL.CYC_LOSS_WEIGHT = 0.1  # 模态一致性损失权重
+_C.MODEL.CMT_NUM_PARTS = 4  # 切分部件数量
+_C.MODEL.USE_CMT = True  # 开关
 
 # Modality Information Embeddings
 _C.MODEL.MIE_COE = 3.0
@@ -58,7 +60,6 @@ _C.MODEL.MIE = False
 _C.MODEL.SSE = False
 # Pretrain with images pairs
 _C.MODEL.PAIR = False
-
 # -----------------------------------------------------------------------------
 # INPUT
 # -----------------------------------------------------------------------------
