@@ -10,7 +10,6 @@ import torch.distributed as dist
 from loss import clip_loss
 from loss.cmt_loss import ModalityConsistencyLoss
 from loss.topo_loss import TopologicalConsistencyLoss
-from loss.cpm_loss import CPMLoss
 
 
 def do_train_pair(cfg, model, train_loader_pair, optimizer, scheduler, local_rank, start_epoch=1):
@@ -107,7 +106,6 @@ def do_train(cfg, model, center_criterion, train_loader, val_loader, optimizer, 
 
     cmt_loss_fn = ModalityConsistencyLoss()
     topo_loss_fn = TopologicalConsistencyLoss(h_num=h_num, w_num=w_num)
-    cpm_loss_fn = CPMLoss(margin=0.2)
 
     logger = logging.getLogger("transreid.train")
     logger.info("start training")
@@ -154,18 +152,21 @@ def do_train(cfg, model, center_criterion, train_loader, val_loader, optimizer, 
             target_cam = target_cam.to(device)
             img_wh = img_wh.to(device)
             with amp.autocast(enabled=True):
-                # 获取模型输出
                 outputs = model(img, target, cam_label=target_cam, img_wh=img_wh)
+
                 loss_cyc = torch.tensor(0.0).to(device)
                 loss_topo = torch.tensor(0.0).to(device)
-                loss_cpm = torch.tensor(0.0).to(device)
-                if isinstance(outputs, tuple) and len(outputs) == 6:
-                    cls_score, f_final, f_comp, saliency, attn_map, f_generated = outputs
+                # loss_cpm = ... (删除)
 
-                    # 1. 基础 Loss (ID + Triplet)
+                # === 修改处 1: 判断条件改为 5 ===
+                if isinstance(outputs, tuple) and len(outputs) == 5:
+                    # 解包 5 个变量
+                    cls_score, f_final, f_comp, saliency, attn_map = outputs
+
+                    # 1. 基础 Loss
                     loss_base = loss_fn(cls_score, f_final, target, target_cam)
 
-                    # 2. ST-CMT: 模态一致性 Loss (带显著性加权)
+                    # 2. ST-CMT: 模态一致性 Loss (带显著性)
                     if f_comp is not None:
                         loss_cyc = cmt_loss_fn(f_final, f_comp, target, target_cam, saliency_scores=saliency)
 
@@ -173,15 +174,9 @@ def do_train(cfg, model, center_criterion, train_loader, val_loader, optimizer, 
                     if attn_map is not None:
                         loss_topo = topo_loss_fn(attn_map)
 
-                    # 4. UFE: 扩张 CPM Loss
-                    if f_generated is not None:
-                        # 如果 f_final 被拆成了 list (为了Triplet)，这里要堆叠回去传给 CPM
-                        f_final_tensor = torch.stack(f_final, dim=1) if isinstance(f_final, list) else f_final
-                        loss_cpm = cpm_loss_fn(f_final_tensor, f_generated, target, target_cam)
-
-                    # === 总 Loss (移除了 MSEL) ===
-                    # 建议权重: Cyc=0.1~0.2, Topo=0.1, CPM=0.1
-                    loss = loss_base + cfg.MODEL.CYC_LOSS_WEIGHT * loss_cyc + 0.1 * loss_topo + 0.1 * loss_cpm
+                    # === 修改处 2: 总 Loss ===
+                    loss = loss_base + cfg.MODEL.CYC_LOSS_WEIGHT * loss_cyc + cfg.MODEL.TOPO_LOSS_WEIGHT * loss_topo
+                    # + loss_cpm (已删除)
 
                 elif isinstance(outputs, tuple) and len(outputs) == 2:
                     # Baseline 情况

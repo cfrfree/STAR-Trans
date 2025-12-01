@@ -8,17 +8,15 @@ MODEL:
   NO_MARGIN: True
   DEVICE_ID: ('0')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransOSS'
-  STRIDE_SIZE: [16, 16]
+  STRIDE_SIZE: [14, 14]
   MIE: True
   MIE_COE: 3.0
   SSE: True
   PAIR: False
   USE_CMT: True
-  USE_DEEN: True
   CMT_NUM_PARTS: 2
   CYC_LOSS_WEIGHT: 0.1
   TOPO_LOSS_WEIGHT: 0.2 
-  CPM_LOSS_WEIGHT: 0.1
 
 INPUT:
   SIZE_TRAIN: [224,224]
@@ -42,7 +40,7 @@ DATALOADER:
 SOLVER:
   OPTIMIZER_NAME: 'AdamW'
   MAX_EPOCHS: 200
-  BASE_LR: 0.0001
+  BASE_LR: 0.00005
   IMS_PER_BATCH: 32
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
@@ -60,4 +58,4 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
-OUTPUT_DIR: './logs/STAR-Trans_eva_b32_1e-4_DEEN'
+OUTPUT_DIR: './logs/tmp'

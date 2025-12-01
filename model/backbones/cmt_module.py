@@ -2,56 +2,32 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-# === 独立模块 1: 多样性嵌入生成器 (UFE / DEEN) ===
-class DiverseEmbeddingGenerator(nn.Module):
-    def __init__(self, in_dim, num_variations=3, hidden_ratio=0.5):
-        super(DiverseEmbeddingGenerator, self).__init__()
-        self.num_variations = num_variations
-        hidden_dim = int(in_dim * hidden_ratio)
-
-        # K 个独立的 MLP 头
-        self.heads = nn.ModuleList(
-            [
-                nn.Sequential(nn.Linear(in_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, in_dim), nn.LayerNorm(in_dim))
-                for _ in range(num_variations)
-            ]
-        )
-
-    def forward(self, x):
-        """
-        输入 x: [B, P, D]
-        输出: [B, K, P, D]
-        """
-        outputs = []
-        for head in self.heads:
-            out = x + head(x)  # 残差连接
-            outputs.append(out)
-        return torch.stack(outputs, dim=1)
+# === 1. 彻底删除 DiverseEmbeddingGenerator 类 ===
+# (此处代码已删除)
 
 
-# === 独立模块 2: ST-CMT (包含 MAM + Saliency + Topo) ===
+# === 2. 保留 ST-CMT 模块 ===
 class CMTModule(nn.Module):
     def __init__(self, in_dim, num_parts=2, num_classes=361):
         super(CMTModule, self).__init__()
         self.num_parts = num_parts
         self.in_dim = in_dim
 
-        # 1. MAM: 模态原型
+        # MAM: 模态原型
         self.prototypes_rgb = nn.Parameter(torch.randn(num_parts, in_dim))
         self.prototypes_sar = nn.Parameter(torch.randn(num_parts, in_dim))
 
         self.m_decoder_layer = nn.TransformerDecoderLayer(d_model=in_dim, nhead=8, dim_feedforward=2048, dropout=0.1)
         self.m_decoder = nn.TransformerDecoder(self.m_decoder_layer, num_layers=1)
 
-        # 2. Topo: 拓扑 Part Tokens (双向拓扑一致性)
+        # Topo: 拓扑 Part Tokens
         self.part_tokens = nn.Parameter(torch.randn(1, num_parts, in_dim))
         nn.init.normal_(self.part_tokens, std=0.02)
 
-        # 3. Saliency: 显著性预测 (散射加权对齐)
+        # Saliency: 显著性预测
         self.saliency_proj = nn.Sequential(nn.Linear(in_dim, in_dim // 4), nn.ReLU(), nn.Linear(in_dim // 4, 1), nn.Sigmoid())
 
-        # 4. 分类器
+        # 分类器
         self.classifiers = nn.ModuleList([nn.Linear(in_dim, num_classes, bias=False) for _ in range(num_parts)])
 
         self._init_params()
@@ -67,7 +43,7 @@ class CMTModule(nn.Module):
         B, N, D = patch_tokens.shape
         part_queries = self.part_tokens.expand(B, -1, -1)
         attn_score = torch.matmul(part_queries, patch_tokens.transpose(1, 2)) / (D**0.5)
-        attn_map = F.softmax(attn_score, dim=-1)  # [B, P, N] 用于 Topo Loss
+        attn_map = F.softmax(attn_score, dim=-1)
         part_feats = torch.matmul(attn_map, patch_tokens)
         return part_feats, attn_map
 
@@ -75,10 +51,10 @@ class CMTModule(nn.Module):
         # 1. 软注意力获取特征
         F_parts, attn_map = self.get_part_features_soft(patch_tokens)
 
-        # 2. 计算显著性 (Saliency)
-        saliency_scores = self.saliency_proj(F_parts)  # [B, P, 1] 用于 Loss 加权
+        # 2. 计算显著性
+        saliency_scores = self.saliency_proj(F_parts)
 
-        # 3. 模态补偿 (MAM)
+        # 3. 模态补偿
         is_rgb = cam_ids == 0
         is_sar = cam_ids == 1
         F_compensated = torch.zeros_like(F_parts)
@@ -104,8 +80,7 @@ class CMTModule(nn.Module):
             for i in range(self.num_parts):
                 cls_outputs.append(self.classifiers[i](F_final[:, i, :]))
 
-            # 返回: 最终特征, 补偿特征, 分类Logits, 显著性分数, 注意力图
-            # 注意：这里不再包含 F_generated
+            # === 修改处：只返回 5 个值 (移除了 F_parts) ===
             return F_final, F_compensated, cls_outputs, saliency_scores, attn_map
 
         return F_final.view(F_final.size(0), -1), None, None, None, None

@@ -3,7 +3,6 @@ import torch.nn as nn
 import timm
 import os
 from timm.layers import resample_abs_pos_embed
-
 from .backbones.resnet import ResNet, Bottleneck
 from .backbones.vit_transoss import vit_base_patch16_224_TransOSS, vit_large_patch16_224_TransOSS
 from .backbones.cmt_module import CMTModule
@@ -421,7 +420,7 @@ def make_model(cfg, num_class, camera_num):
                 patch_size = 16
             print(f"自动检测特征维度: {embed_dim}, Patch Size: {patch_size}")
 
-            # --- 5. 适配器 Wrapper ---
+            # --- 5. 适配器 Wrapper ---w
             class ReIDWrapper(nn.Module):
                 def __init__(self, backbone, input_dim, num_classes, cfg, patch_size):
                     super().__init__()
@@ -453,23 +452,18 @@ def make_model(cfg, num_class, camera_num):
                 def forward(self, x, label=None, cam_label=None, img_wh=None):
                     features = self.backbone.forward_features(x)
                     prefix_tokens = self.backbone.num_prefix_tokens
-                    global_feat = features[:, 0]
                     patch_tokens = features[:, prefix_tokens:]
+                    if self.use_cmt and patch_tokens is not None:
+                        cmt_out = self.cmt_head(patch_tokens, cam_label)
 
-                    if self.use_cmt:
-                        f_final, f_comp, cls_scores, attn_map = self.cmt_head(patch_tokens, cam_label, self.h_num, self.w_num)
                         if self.training:
-                            part_feats_list = [f_final[:, i, :] for i in range(f_final.size(1))]
-                            return cls_scores, part_feats_list, f_comp, attn_map
-                        else:
-                            return f_final
+                            f_final, f_comp, cls_scores, saliency_scores, attn_map = cmt_out
 
-                    feat = self.bottleneck(global_feat)
-                    if self.training:
-                        cls_score = self.classifier(feat)
-                        return cls_score, global_feat
-                    else:
-                        return feat
+                            part_feats_list = [f_final[:, i, :] for i in range(f_final.size(1))]
+
+                            return cls_scores, part_feats_list, f_comp, saliency_scores, attn_map
+                        else:
+                            return cmt_out[0]
 
             reid_model = ReIDWrapper(model, input_dim=embed_dim, num_classes=num_class, cfg=cfg, patch_size=patch_size)
             return reid_model
