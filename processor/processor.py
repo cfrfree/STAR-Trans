@@ -10,6 +10,7 @@ import torch.distributed as dist
 from loss import clip_loss
 from loss.cmt_loss import ModalityConsistencyLoss
 from loss.topo_loss import TopologicalConsistencyLoss
+from loss.cpm_loss import CPMLoss
 
 
 def do_train_pair(cfg, model, train_loader_pair, optimizer, scheduler, local_rank, start_epoch=1):
@@ -93,12 +94,23 @@ def do_train(cfg, model, center_criterion, train_loader, val_loader, optimizer, 
 
     device = "cuda"
     epochs = cfg.SOLVER.MAX_EPOCHS
+
+    if "eva02" in cfg.MODEL.PRETRAIN_PATH:
+        patch_size = 14
+    else:
+        patch_size = 16  # 默认值
+
+    h_num = cfg.INPUT.SIZE_TRAIN[0] // patch_size
+    w_num = cfg.INPUT.SIZE_TRAIN[1] // patch_size
+
+    print(f"初始化 TopoLoss: Image={cfg.INPUT.SIZE_TRAIN}, Patch={patch_size} -> Grid=({h_num}, {w_num})")
+
     cmt_loss_fn = ModalityConsistencyLoss()
-    topo_loss_fn = TopologicalConsistencyLoss(h_num=16, w_num=8)
+    topo_loss_fn = TopologicalConsistencyLoss(h_num=h_num, w_num=w_num)
+    cpm_loss_fn = CPMLoss(margin=0.2)
 
     logger = logging.getLogger("transreid.train")
     logger.info("start training")
-    _LOCAL_PROCESS_GROUP = None
 
     if device:
         model.to(local_rank)
@@ -123,8 +135,18 @@ def do_train(cfg, model, center_criterion, train_loader, val_loader, optimizer, 
         acc_meter.reset()
         evaluator.reset()
         scheduler.step(epoch)
+        # is_stage_one = epoch <= cfg.INPUT.GRAYSCALE_EPOCH
         model.train()
         for n_iter, (img, vid, target_cam, target_view, img_wh) in enumerate(train_loader):
+            # if is_stage_one:
+            #     # 找到光学图片的索引
+            #     rgb_idx = target_cam == 0
+            #     if rgb_idx.any():
+            #         # 转灰度
+            #         # img[rgb_idx] = TF.rgb_to_grayscale(img[rgb_idx], num_output_channels=3)
+            #         # 或者简单的通道平均
+            #         gray = img[rgb_idx].mean(dim=1, keepdim=True).repeat(1, 3, 1, 1)
+            #         img[rgb_idx] = gray
             optimizer.zero_grad()
             optimizer_center.zero_grad()
             img = img.to(device)
@@ -134,37 +156,39 @@ def do_train(cfg, model, center_criterion, train_loader, val_loader, optimizer, 
             with amp.autocast(enabled=True):
                 # 获取模型输出
                 outputs = model(img, target, cam_label=target_cam, img_wh=img_wh)
-
-                # === 修改处 1：适配 4 个返回值 ===
-                # 判断返回值的长度来决定是否使用 CMT Loss
-                saliency_scores = None  # 初始化
-
-                if isinstance(outputs, tuple) and len(outputs) == 4:
-                    cls_score, f_final, f_comp, attn_map = outputs  # 注意第4个是 attn_map
-                    use_cmt_loss = True
-                elif isinstance(outputs, tuple) and len(outputs) == 3:
-                    # 兼容旧代码或不带 saliency 的情况
-                    cls_score, f_final, f_comp = outputs
-                    use_cmt_loss = True
-                else:
-                    # 不使用 CMT 的情况
-                    cls_score, f_final = outputs
-                    f_comp = None
-                    use_cmt_loss = False
-
-                # 计算基础 Loss (ID + Triplet)
-                loss_base = loss_fn(cls_score, f_final, target, target_cam)
-
                 loss_cyc = torch.tensor(0.0).to(device)
-                if use_cmt_loss and f_comp is not None:
-                    # === 修改处 2：传入 saliency_scores ===
-                    # 注意：这里调用的是我们刚改好的支持加权的 cmt_loss_fn
-                    loss_cyc = cmt_loss_fn(f_final, f_comp, target, target_cam, saliency_scores=saliency_scores)
-                    loss_topo = topo_loss_fn(attn_map)
+                loss_topo = torch.tensor(0.0).to(device)
+                loss_cpm = torch.tensor(0.0).to(device)
+                if isinstance(outputs, tuple) and len(outputs) == 6:
+                    cls_score, f_final, f_comp, saliency, attn_map, f_generated = outputs
 
-                    loss = loss_base + cfg.MODEL.CYC_LOSS_WEIGHT * loss_cyc + 0.2 * loss_topo
+                    # 1. 基础 Loss (ID + Triplet)
+                    loss_base = loss_fn(cls_score, f_final, target, target_cam)
+
+                    # 2. ST-CMT: 模态一致性 Loss (带显著性加权)
+                    if f_comp is not None:
+                        loss_cyc = cmt_loss_fn(f_final, f_comp, target, target_cam, saliency_scores=saliency)
+
+                    # 3. ST-CMT: 拓扑一致性 Loss
+                    if attn_map is not None:
+                        loss_topo = topo_loss_fn(attn_map)
+
+                    # 4. UFE: 扩张 CPM Loss
+                    if f_generated is not None:
+                        # 如果 f_final 被拆成了 list (为了Triplet)，这里要堆叠回去传给 CPM
+                        f_final_tensor = torch.stack(f_final, dim=1) if isinstance(f_final, list) else f_final
+                        loss_cpm = cpm_loss_fn(f_final_tensor, f_generated, target, target_cam)
+
+                    # === 总 Loss (移除了 MSEL) ===
+                    # 建议权重: Cyc=0.1~0.2, Topo=0.1, CPM=0.1
+                    loss = loss_base + cfg.MODEL.CYC_LOSS_WEIGHT * loss_cyc + 0.1 * loss_topo + 0.1 * loss_cpm
+
+                elif isinstance(outputs, tuple) and len(outputs) == 2:
+                    # Baseline 情况
+                    cls_score, f_final = outputs
+                    loss = loss_fn(cls_score, f_final, target, target_cam)
                 else:
-                    loss = loss_base
+                    loss = torch.tensor(0.0, requires_grad=True).to(device)
 
             scaler.scale(loss).backward()
 

@@ -49,9 +49,13 @@ _C.MODEL.DROP_OUT = 0.0
 _C.MODEL.ATT_DROP_RATE = 0.0
 _C.MODEL.TRANSFORMER_TYPE = "None"
 _C.MODEL.STRIDE_SIZE = [16, 16]
-_C.MODEL.CYC_LOSS_WEIGHT = 0.1  # 模态一致性损失权重
+_C.MODEL.CYC_LOSS_WEIGHT = 0.1
+_C.MODEL.TOPO_LOSS_WEIGHT = 0.1  # 模态一致性损失权重
 _C.MODEL.CMT_NUM_PARTS = 4  # 切分部件数量
-_C.MODEL.USE_CMT = True  # 开关
+_C.MODEL.USE_CMT = False  # 开关
+_C.MODEL.USE_DEEN = False
+_C.MODEL.CPM_LOSS_WEIGHT = 0.1
+
 
 # Modality Information Embeddings
 _C.MODEL.MIE_COE = 3.0
@@ -78,6 +82,7 @@ _C.INPUT.PIXEL_MEAN = [0.485, 0.456, 0.406]
 _C.INPUT.PIXEL_STD = [0.229, 0.224, 0.225]
 # Value of padding size
 _C.INPUT.PADDING = 10
+_C.INPUT.GRAYSCALE_EPOCH = 10
 
 # -----------------------------------------------------------------------------
 # Dataset

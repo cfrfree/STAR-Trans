@@ -1,6 +1,6 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
-  PRETRAIN_PATH: /home/chenfree2002/Python/checkpoints/dinov3_vitb16_pretrain_lvd1689m.pth
+  PRETRAIN_PATH: "/home/chenfree2002/Python/checkpoints/eva02_base_patch14_224.mim_in22k.bin"
   METRIC_LOSS_TYPE: 'triplet'
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
@@ -14,17 +14,21 @@ MODEL:
   SSE: True
   PAIR: False
   USE_CMT: True
-  CMT_NUM_PARTS: 2        # 舰船建议 4-6
-  CYC_LOSS_WEIGHT: 0.1    # 建议从 0.1 或 0.2 开始尝试
+  USE_DEEN: True
+  CMT_NUM_PARTS: 2
+  CYC_LOSS_WEIGHT: 0.1
+  TOPO_LOSS_WEIGHT: 0.2 
+  CPM_LOSS_WEIGHT: 0.1
 
 INPUT:
-  SIZE_TRAIN: [256, 128]
-  SIZE_TEST: [256, 128]
+  SIZE_TRAIN: [224,224]
+  SIZE_TEST: [224,224]
   PROB: 0.5 # random horizontal flip
   RE_PROB: 0.5 # random erasing
   PADDING: 10
   PIXEL_MEAN: [0.485, 0.456, 0.406]
   PIXEL_STD: [0.229, 0.224, 0.225]
+  GRAYSCALE_EPOCH: 10
 
 DATASETS:
   NAMES: ('HOSS')
@@ -38,8 +42,8 @@ DATALOADER:
 SOLVER:
   OPTIMIZER_NAME: 'AdamW'
   MAX_EPOCHS: 200
-  BASE_LR: 0.0005
-  IMS_PER_BATCH: 16
+  BASE_LR: 0.0001
+  IMS_PER_BATCH: 32
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
   CHECKPOINT_PERIOD: 10
@@ -56,4 +60,4 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
-OUTPUT_DIR: './logs/STAR-Trans_dino_03'
+OUTPUT_DIR: './logs/STAR-Trans_eva_b32_1e-4_DEEN'
