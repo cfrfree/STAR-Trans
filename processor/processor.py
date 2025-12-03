@@ -94,10 +94,7 @@ def do_train(cfg, model, center_criterion, train_loader, val_loader, optimizer, 
     device = "cuda"
     epochs = cfg.SOLVER.MAX_EPOCHS
 
-    if "eva02" in cfg.MODEL.PRETRAIN_PATH:
-        patch_size = 14
-    else:
-        patch_size = 16  # 默认值
+    patch_size = 14
 
     h_num = cfg.INPUT.SIZE_TRAIN[0] // patch_size
     w_num = cfg.INPUT.SIZE_TRAIN[1] // patch_size

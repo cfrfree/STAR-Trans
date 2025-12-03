@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import timm
 import os
+import copy
 import logging
 
 # 引入 ST-CMT 模块
@@ -33,35 +34,81 @@ def weights_init_classifier(m):
             nn.init.constant_(m.bias, 0.0)
 
 
-class EVA02_STCMT(nn.Module):
-    """
-    基于 EVA-02 Backbone 的 ST-CMT 网络架构
-    """
+# === 双模态 Patch Embedding 模块 ===
+class DualModalPatchEmbed(nn.Module):
+    def __init__(self, original_embed):
+        super().__init__()
+        self.rgb_embed = original_embed
+        self.sar_embed = copy.deepcopy(original_embed)
+        self.current_cam_label = None
 
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.rgb_embed, name)
+
+    def forward(self, x):
+        if self.current_cam_label is None:
+            return self.rgb_embed(x)
+
+        cam_label = self.current_cam_label
+        B = x.shape[0]
+        rgb_idx = cam_label == 0
+        sar_idx = cam_label == 1
+
+        x_rgb = None
+        x_sar = None
+
+        if rgb_idx.any():
+            x_rgb = self.rgb_embed(x[rgb_idx])
+        if sar_idx.any():
+            x_sar = self.sar_embed(x[sar_idx])
+
+        if x_rgb is not None and x_sar is None:
+            return x_rgb
+        if x_sar is not None and x_rgb is None:
+            return x_sar
+
+        out_shape = list(x_rgb.shape)
+        out_shape[0] = B
+        out = torch.zeros(out_shape, dtype=x_rgb.dtype, device=x_rgb.device)
+        out[rgb_idx] = x_rgb
+        out[sar_idx] = x_sar
+        return out
+
+
+class EVA02_STCMT(nn.Module):
     def __init__(self, num_classes, camera_num, cfg):
         super(EVA02_STCMT, self).__init__()
 
-        # 1. 自动推断并构建 Backbone (EVA-02)
-        # 这一步非常关键，必须匹配权重文件的结构
+        # 1. 构建 Backbone
         model_name = self._get_model_name(cfg.MODEL.PRETRAIN_PATH)
         print(f"Building Backbone: {model_name}")
 
         self.backbone = timm.create_model(model_name, pretrained=False, img_size=cfg.INPUT.SIZE_TRAIN, num_classes=0, dynamic_img_size=True)
 
-        # 加载你指定的权重
         self._load_pretrained(cfg.MODEL.PRETRAIN_PATH)
+
+        # 双流 Tokenizer 开关
+        self.use_dual_tokenizer = getattr(cfg.MODEL, "DUAL_TOKENIZER", True)
+        if self.use_dual_tokenizer:
+            print(">>> [Config] DUAL_TOKENIZER is ON.")
+            self.backbone.patch_embed = DualModalPatchEmbed(self.backbone.patch_embed)
+        else:
+            print(">>> [Config] DUAL_TOKENIZER is OFF.")
 
         self.in_planes = self.backbone.num_features
         self.num_prefix_tokens = self.backbone.num_prefix_tokens if hasattr(self.backbone, "num_prefix_tokens") else 1
-        print(f"Backbone initialized. Dim: {self.in_planes}, Prefix Tokens: {self.num_prefix_tokens}")
+        print(f"Backbone initialized. Dim: {self.in_planes}")
 
-        # 2. 构建 ST-CMT 模块
+        # 2. ST-CMT 模块
         self.use_cmt = cfg.MODEL.USE_CMT
         if self.use_cmt:
             print(f"Initializing ST-CMT Module (Parts={cfg.MODEL.CMT_NUM_PARTS})...")
             self.cmt_head = CMTModule(in_dim=self.in_planes, num_parts=cfg.MODEL.CMT_NUM_PARTS, num_classes=num_classes)
 
-        # 3. 构建 Baseline 头部
+        # 3. Baseline 头部
         self.bottleneck = nn.BatchNorm1d(self.in_planes)
         self.bottleneck.bias.requires_grad_(False)
         self.bottleneck.apply(weights_init_kaiming)
@@ -81,7 +128,10 @@ class EVA02_STCMT(nn.Module):
             self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
             self.classifier.apply(weights_init_classifier)
 
+        # === 预训练模式相关参数 ===
         self.train_pair = False
+        # 初始 logit_scale (log(1/0.07) ≈ 2.6592)，用于对比学习
+        self.logit_scale = nn.Parameter(torch.tensor(2.6592))
 
     def train_with_pair(self):
         self.train_pair = True
@@ -90,34 +140,17 @@ class EVA02_STCMT(nn.Module):
         self.train_pair = False
 
     def _get_model_name(self, path):
-        """
-        根据权重路径自动匹配 timm 中的模型名称
-        """
-        # 你的权重是: eva02_base_patch14_224.mim_in22k.bin
-        if "eva02" in path:
-            if "large" in path:
-                if "448" in path:
-                    return "eva02_large_patch14_448.mim_in22k_ft_in1k"
-                else:
-                    return "eva02_large_patch14_224.mim_in22k"  # 假设有224版本
-            else:  # base
-                if "448" in path:
-                    return "eva02_base_patch14_448.mim_in22k_ft_in1k"
-                else:
-                    # === 修正点：匹配 224 版本 ===
-                    return "eva02_base_patch14_224.mim_in22k"
-
-        # 默认回退
-        return "eva02_base_patch14_224.mim_in22k"
+        if "large" in path:
+            return "eva02_large_patch14_448.mim_in22k_ft_in1k"
+        else:
+            return "eva02_base_patch14_224.mim_in22k"
 
     def _load_pretrained(self, path):
         if not os.path.isfile(path):
             print(f"Warning: Pretrained path {path} not found. Using random init.")
             return
-
         print(f"Loading pretrained weights from: {path}")
         checkpoint = torch.load(path, map_location="cpu")
-
         if "state_dict" in checkpoint:
             state_dict = checkpoint["state_dict"]
         elif "model" in checkpoint:
@@ -125,56 +158,58 @@ class EVA02_STCMT(nn.Module):
         else:
             state_dict = checkpoint
 
-        # === 关键：过滤掉不匹配的头部权重 ===
-        # EVA02 预训练权重可能包含 head.weight/bias，而我们的 backbone 没有 head
         for k in list(state_dict.keys()):
             if "head" in k:
                 del state_dict[k]
 
-        # 处理位置编码插值 (如果有必要)
         if "pos_embed" in state_dict:
-            ckpt_pos_shape = state_dict["pos_embed"].shape
-            model_pos_shape = self.backbone.pos_embed.shape
-            if ckpt_pos_shape != model_pos_shape:
-                print(f"Resizing pos_embed: {ckpt_pos_shape} -> {model_pos_shape}")
-                state_dict["pos_embed"] = resample_abs_pos_embed(
-                    state_dict["pos_embed"], new_size=self.backbone.patch_embed.grid_size, num_prefix_tokens=self.backbone.num_prefix_tokens
-                )
-
-        msg = self.backbone.load_state_dict(state_dict, strict=False)
-        print(f"Weight loading result: {msg}")
+            state_dict["pos_embed"] = resample_abs_pos_embed(
+                state_dict["pos_embed"], new_size=self.backbone.patch_embed.grid_size, num_prefix_tokens=self.backbone.num_prefix_tokens
+            )
+        self.backbone.load_state_dict(state_dict, strict=False)
 
     def forward(self, x, label=None, cam_label=None, img_wh=None):
+        # 注入模态标签 (用于 Dual Tokenizer)
+        if self.use_dual_tokenizer and hasattr(self.backbone.patch_embed, "current_cam_label"):
+            self.backbone.patch_embed.current_cam_label = cam_label
+
         # 1. 提取特征
         features = self.backbone.forward_features(x)
 
-        # EVA-02 的 features 结构是 [B, N+1, D] (CLS在0位)
         global_feat = features[:, 0]
         patch_tokens = features[:, self.num_prefix_tokens :]
 
-        # =====================================================
-        # ST-CMT 逻辑
-        # =====================================================
+        # === 预训练模式 (Contrastive Learning) ===
+        # 此时 batch 包含 [RGBs; SARs]，我们需要计算它们之间的相似度
+        if self.train_pair:
+            # 假设前半部分是 RGB，后半部分是 SAR (由 Dataloader 保证)
+            b_s = global_feat.size(0)
+            opt_embeds = global_feat[0 : b_s // 2]
+            sar_embeds = global_feat[b_s // 2 :]
+
+            # 归一化
+            opt_embeds = opt_embeds / opt_embeds.norm(p=2, dim=-1, keepdim=True)
+            sar_embeds = sar_embeds / sar_embeds.norm(p=2, dim=-1, keepdim=True)
+
+            # 计算 Logits
+            logit_scale = self.logit_scale.exp()
+            logits_per_sar = torch.matmul(sar_embeds, opt_embeds.t()) * logit_scale
+
+            return logits_per_sar
+
+        # === ST-CMT 逻辑 (微调模式) ===
         if self.use_cmt:
-            # 传入 cam_label
             cmt_out = self.cmt_head(patch_tokens, cam_label)
-
             if self.training:
-                # 解包 5 个值 (F_final, F_comp, Logits, Saliency, AttnMap)
+                # 解包 5 个值
                 f_final, f_comp, cls_scores, saliency_scores, attn_map = cmt_out
-
-                # 准备 Triplet Loss
                 part_feats_list = [f_final[:, i, :] for i in range(f_final.size(1))]
-
                 return cls_scores, part_feats_list, f_comp, saliency_scores, attn_map
             else:
                 return cmt_out[0]
 
-        # =====================================================
-        # Baseline 逻辑
-        # =====================================================
+        # === Baseline 逻辑 ===
         feat = self.bottleneck(global_feat)
-
         if self.training:
             if self.ID_LOSS_TYPE in ("arcface", "cosface", "amsoftmax", "circle"):
                 cls_score = self.classifier(feat, label)
@@ -188,7 +223,6 @@ class EVA02_STCMT(nn.Module):
         param_dict = torch.load(trained_path, map_location="cpu")
         if "state_dict" in param_dict:
             param_dict = param_dict["state_dict"]
-
         new_state_dict = {}
         for k, v in param_dict.items():
             if k.startswith("module."):

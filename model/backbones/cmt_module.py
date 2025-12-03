@@ -2,8 +2,70 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# === 1. 彻底删除 DiverseEmbeddingGenerator 类 ===
-# (此处代码已删除)
+
+class DilatedConvBlock(nn.Module):
+    def __init__(self, in_dim):
+        super(DilatedConvBlock, self).__init__()
+        mid_dim = in_dim // 4
+        # 多分支膨胀卷积
+        self.branch1 = nn.Conv1d(in_dim, mid_dim, kernel_size=3, stride=1, padding=1, dilation=1)
+        self.branch2 = nn.Conv1d(in_dim, mid_dim, kernel_size=3, stride=1, padding=2, dilation=2)
+        self.branch3 = nn.Conv1d(in_dim, mid_dim, kernel_size=3, stride=1, padding=3, dilation=3)
+        self.act = nn.ReLU()
+        self.conv_out = nn.Conv1d(mid_dim, in_dim, kernel_size=1)
+
+        self._init_params()
+
+    def _init_params(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+
+    def forward(self, x):
+        # x: [B, D, N]
+        out = self.branch1(x) + self.branch2(x) + self.branch3(x)
+        out = self.act(out)
+        out = self.conv_out(out)
+        return out
+
+
+class InputDiverseEnhancer(nn.Module):
+    """
+    放置在 PatchEmbed 之后，用于增强初始 Token 的多样性与鲁棒性
+    """
+
+    def __init__(self, in_dim):
+        super(InputDiverseEnhancer, self).__init__()
+
+        # 核心生成器 (使用类似 DEEN 的结构)
+        self.conv_block = DilatedConvBlock(in_dim)
+
+        # 融合层 (LayerNorm + 可学习的缩放系数)
+        self.norm = nn.LayerNorm(in_dim)
+        self.scale = nn.Parameter(torch.zeros(1))  # 初始为0，让训练平滑启动
+
+    def forward(self, x):
+        """
+        输入 x: [B, N, D] (Patch Tokens)
+        输出 out: [B, N, D] (Enhanced Tokens)
+        """
+        # 1. 维度转置 [B, N, D] -> [B, D, N]
+        x_in = x.transpose(1, 2)
+
+        # 2. 提取多样性特征 (Delta)
+        delta = self.conv_block(x_in)
+
+        # 3. 还原维度
+        delta = delta.transpose(1, 2)
+
+        # 4. 残差融合 (Residual Connection)
+        # out = Original + Scale * Delta
+        out = x + self.scale * delta
+        out = self.norm(out)
+
+        return out
 
 
 # === 2. 保留 ST-CMT 模块 ===

@@ -1,7 +1,7 @@
 import torch
 
 # 你的权重文件路径
-path = "/home/chenfree2002/Python/checkpoints/dinov3_vitb16_pretrain_lvd1689m.pth"
+path = "logs/pretrain_base/transformer_40.pth"
 
 # 加载权重
 checkpoint = torch.load(path, map_location="cpu")

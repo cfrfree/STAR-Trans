@@ -53,7 +53,7 @@ _C.MODEL.CYC_LOSS_WEIGHT = 0.1
 _C.MODEL.TOPO_LOSS_WEIGHT = 0.1  # 模态一致性损失权重
 _C.MODEL.CMT_NUM_PARTS = 4  # 切分部件数量
 _C.MODEL.USE_CMT = False  # 开关
-
+_C.MODEL.DUAL_TOKENIZER = True
 
 # Modality Information Embeddings
 _C.MODEL.MIE_COE = 3.0

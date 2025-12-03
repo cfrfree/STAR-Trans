@@ -1,24 +1,17 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
-  # PRETRAIN_PATH: "/home/chenfree2002/Python/checkpoints/eva02_base_patch14_224.mim_in22k.bin"
-  PRETRAIN_PATH: logs/pretrain_base/transformer_40.pth
-  METRIC_LOSS_TYPE: 'triplet'
-  IF_LABELSMOOTH: 'off'
-  IF_WITH_CENTER: 'no'
+  PRETRAIN_PATH: "/home/chenfree2002/Python/checkpoints/eva02_base_patch14_224.mim_in22k.bin"
   NAME: 'transformer'
   NO_MARGIN: True
   DEVICE_ID: ('0')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransOSS'
-  STRIDE_SIZE: [14, 14]
+  STRIDE_SIZE: [16, 16]
   MIE: True
   MIE_COE: 3.0
-  SSE: True
-  PAIR: False
-  USE_CMT: True
-  CMT_NUM_PARTS: 2
-  CYC_LOSS_WEIGHT: 0.1
-  TOPO_LOSS_WEIGHT: 0.2 
-  DUAL_TOKENIZER: True
+  SSE: False
+  PAIR: True
+  USE_CMT: False
+  DUAL_TOKENIZER: False
 
 INPUT:
   SIZE_TRAIN: [224,224]
@@ -28,11 +21,10 @@ INPUT:
   PADDING: 10
   PIXEL_MEAN: [0.485, 0.456, 0.406]
   PIXEL_STD: [0.229, 0.224, 0.225]
-  GRAYSCALE_EPOCH: 10
 
 DATASETS:
-  NAMES: ('HOSS')
-  ROOT_DIR: ('/home/share/chenfree/ReID/')
+  NAMES: 'Pretrain'
+  ROOT_DIR: '/home/share/chenfree/ReID/'
 
 DATALOADER:
   SAMPLER: 'softmax_triplet'
@@ -41,14 +33,14 @@ DATALOADER:
 
 SOLVER:
   OPTIMIZER_NAME: 'AdamW'
-  MAX_EPOCHS: 200
-  BASE_LR: 0.00005
-  IMS_PER_BATCH: 32
+  MAX_EPOCHS: 60
+  BASE_LR: 0.0001
+  IMS_PER_BATCH: 128
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
-  CHECKPOINT_PERIOD: 10
-  LOG_PERIOD: 50
-  EVAL_PERIOD: 10
+  CHECKPOINT_PERIOD: 5
+  LOG_PERIOD: 100
+  EVAL_PERIOD: 100
   WEIGHT_DECAY:  1e-4
   WEIGHT_DECAY_BIAS: 1e-4
   BIAS_LR_FACTOR: 2
@@ -56,8 +48,8 @@ SOLVER:
 TEST:
   IMS_PER_BATCH: 256
   RE_RANKING: False
-  WEIGHT: 'logs/hoss_transoss_CMT_07/transformer_200.pth'
+  WEIGHT: ''
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
-OUTPUT_DIR: './logs/STAR-Trans_eva_b32_5e-5_dual_pretrained'
+OUTPUT_DIR: './logs/pretrain_base_ori'

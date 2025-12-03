@@ -9,6 +9,7 @@ from .bases import BaseImageDataset
 
 
 class Pretrain(BaseImageDataset):
+    # dataset_dir = "OptiSar_Pair_Plus"
     dataset_dir = "OptiSar_Pair"
 
     def __init__(self, root="", verbose=True, pid_begin=0, **kwargs):
