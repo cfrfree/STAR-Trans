@@ -11,11 +11,11 @@ MODEL:
   SSE: False
   PAIR: True
   USE_CMT: False
-  DUAL_TOKENIZER: False
+  DUAL_TOKENIZER: True
 
 INPUT:
-  SIZE_TRAIN: [224,224]
-  SIZE_TEST: [224,224]
+  SIZE_TRAIN: [252, 126]
+  SIZE_TEST: [252, 126]
   PROB: 0.5 # random horizontal flip
   RE_PROB: 0.5 # random erasing
   PADDING: 10
@@ -52,4 +52,4 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
-OUTPUT_DIR: './logs/pretrain_base_ori'
+OUTPUT_DIR: './logs/pretrain_base'
