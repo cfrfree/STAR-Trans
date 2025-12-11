@@ -5,7 +5,6 @@ from itertools import repeat
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .cmt_module import CMTModule
 
 # from torch._six import container_abcs
 from collections.abc import Iterable
@@ -84,15 +83,7 @@ class Mlp(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(
-        self,
-        dim,
-        num_heads=8,
-        qkv_bias=False,
-        qk_scale=None,
-        attn_drop=0.0,
-        proj_drop=0.0,
-    ):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0.0, proj_drop=0.0, use_gated=False):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -103,6 +94,11 @@ class Attention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
+
+        self.use_gated = use_gated
+        if self.use_gated:
+            self.gate_proj = nn.Linear(dim, dim, bias=False)
+            nn.init.normal_(self.gate_proj.weight, std=0.02)
 
     def forward(self, x):
         B, N, C = x.shape
@@ -118,6 +114,11 @@ class Attention(nn.Module):
         attn = self.attn_drop(attn)
 
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+
+        if self.use_gated:
+            gating_score = torch.sigmoid(self.gate_proj(x))
+            x = x * gating_score
+
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
@@ -137,16 +138,12 @@ class Block(nn.Module):
         drop_path=0.0,
         act_layer=nn.GELU,
         norm_layer=nn.LayerNorm,
+        use_gated=False,
     ):
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
-            dim,
-            num_heads=num_heads,
-            qkv_bias=qkv_bias,
-            qk_scale=qk_scale,
-            attn_drop=attn_drop,
-            proj_drop=drop,
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop, use_gated=use_gated
         )
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
@@ -309,8 +306,7 @@ class TransOSS(nn.Module):
         local_feature=False,
         mie_coe=1.0,
         sse=False,
-        use_cmt=False,
-        cmt_num_parts=2,
+        use_gated_attention=False,
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -375,20 +371,13 @@ class TransOSS(nn.Module):
                     attn_drop=attn_drop_rate,
                     drop_path=dpr[i],
                     norm_layer=norm_layer,
+                    use_gated=use_gated_attention,
                 )
                 for i in range(depth)
             ]
         )
 
         self.norm = norm_layer(embed_dim)
-        # === 核心修改：初始化 CMT 模块 ===
-        self.use_cmt = use_cmt
-        if self.use_cmt:
-            print(f"Initializing ST-CMT Module (Parts={cmt_num_parts})...")
-            # 注意：CMT自带分类器，所以这里我们不需要 self.fc 或者 self.classifier
-            # 但为了兼容原来的加载逻辑，保留 self.fc 也可以，只是 forward 时不用它
-            self.cmt_head = CMTModule(in_dim=embed_dim, num_parts=cmt_num_parts, num_classes=num_classes)
-        # ==============================
         # Classifier head
         self.fc = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         trunc_normal_(self.cls_token, std=0.02)
@@ -467,19 +456,6 @@ class TransOSS(nn.Module):
     def forward(self, x, label=None, cam_label=None, img_wh=None):
         # 获取特征
         cls_token, patch_tokens = self.forward_features(x, cam_label, img_wh)
-
-        # === 新增：CMT Forward 逻辑 ===
-        if self.use_cmt:
-            cmt_out = self.cmt_head(patch_tokens, cam_label)
-            if self.training:
-                # 训练时返回 5 个值用于计算新 Loss
-                # F_final, F_compensated, cls_outputs, saliency_scores, attn_map
-                return cmt_out
-            else:
-                # 测试时只返回特征
-                return cmt_out[0]
-        # ============================
-
         return cls_token  # 外部会处理 bottleneck
 
     def load_param(self, model_path):
@@ -542,8 +518,7 @@ def vit_base_patch16_224_TransOSS(
     local_feature=False,
     mie_coe=1.5,
     sse=False,
-    use_cmt=False,
-    cmt_num_parts=2,
+    use_gated_attention=False,
     **kwargs,
 ):
     model = TransOSS(
@@ -563,8 +538,7 @@ def vit_base_patch16_224_TransOSS(
         mie_coe=mie_coe,
         local_feature=local_feature,
         sse=sse,
-        use_cmt=use_cmt,
-        cmt_num_parts=cmt_num_parts,
+        use_gated_attention=use_gated_attention,
         **kwargs,
     )
 

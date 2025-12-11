@@ -14,10 +14,7 @@ MODEL:
   MIE_COE: 3.0
   SSE: True
   PAIR: False
-  USE_CMT: False
-  CMT_NUM_PARTS: 2
-  CYC_LOSS_WEIGHT: 0.1
-  TOPO_LOSS_WEIGHT: 0.1 
+  GATED_ATTENTION: True
 
 INPUT:
   SIZE_TRAIN: [256, 128]
@@ -50,6 +47,7 @@ SOLVER:
   WEIGHT_DECAY:  1e-4
   WEIGHT_DECAY_BIAS: 1e-4
   BIAS_LR_FACTOR: 2
+  SEED: 1234
 
 TEST:
   EVAL: True
@@ -59,4 +57,4 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
-OUTPUT_DIR: './logs/StarTrans'
+OUTPUT_DIR: './logs/transoss_gated'

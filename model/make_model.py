@@ -149,8 +149,7 @@ class build_transformer(nn.Module):
                 drop_rate=cfg.MODEL.DROP_OUT,
                 attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
                 sse=cfg.MODEL.SSE,
-                use_cmt=cfg.MODEL.USE_CMT,
-                cmt_num_parts=cfg.MODEL.CMT_NUM_PARTS,
+                use_gated_attention=cfg.MODEL.GATED_ATTENTION,
             )
         else:
             raise ValueError("Unsupported model type: {}".format(cfg.MODEL.TRANSFORMER_TYPE))
@@ -223,8 +222,6 @@ class build_transformer(nn.Module):
 
     def forward(self, x, label=None, cam_label=None, img_wh=None):
         global_feat = self.base(x, cam_label=cam_label, img_wh=img_wh)
-        if self.training and isinstance(global_feat, tuple):
-            return global_feat
         if self.training:
             if self.train_pair:
                 b_s = global_feat.size(0)

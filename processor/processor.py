@@ -133,8 +133,6 @@ def do_train(
     loss_meter = AverageMeter()
     acc_meter = AverageMeter()
     loss_base_meter = AverageMeter()
-    loss_cyc_meter = AverageMeter()
-    loss_topo_meter = AverageMeter()
 
     evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)
     scaler = amp.GradScaler()
@@ -146,13 +144,10 @@ def do_train(
         model.train_with_single()
 
     for epoch in range(1, epochs + 1):
-        start_time = time.time()
 
         loss_meter.reset()
         acc_meter.reset()
         loss_base_meter.reset()
-        loss_cyc_meter.reset()
-        loss_topo_meter.reset()
 
         evaluator.reset()
         scheduler.step(epoch)
@@ -169,34 +164,11 @@ def do_train(
             with amp.autocast(enabled=True):
                 outputs = model(img, target, cam_label=target_cam, img_wh=img_wh)
 
-                loss_cyc = torch.tensor(0.0).to(device)
-                loss_topo = torch.tensor(0.0).to(device)
                 loss_base = torch.tensor(0.0).to(device)
 
-                if isinstance(outputs, tuple) and len(outputs) == 5:
-                    f_final, f_comp, cls_score, saliency, attn_map = outputs
-
-                    f_final_list = [f_final[:, i, :] for i in range(f_final.size(1))]
-                    loss_base = loss_fn(cls_score, f_final_list, target, target_cam)
-
-                    if f_comp is not None:
-                        loss_cyc = cmt_loss_fn(
-                            f_final,
-                            f_comp,
-                            target,
-                            target_cam,
-                            saliency_scores=saliency,
-                        )
-
-                    if attn_map is not None:
-                        loss_topo = topo_loss_fn(attn_map)
-
-                    loss = loss_base + cfg.MODEL.CYC_LOSS_WEIGHT * loss_cyc + cfg.MODEL.TOPO_LOSS_WEIGHT * loss_topo
-
-                else:
-                    cls_score, feat = outputs
-                    loss_base = loss_fn(cls_score, feat, target, target_cam)
-                    loss = loss_base
+                cls_score, feat = outputs
+                loss_base = loss_fn(cls_score, feat, target, target_cam)
+                loss = loss_base
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -215,8 +187,6 @@ def do_train(
 
             loss_meter.update(loss.item(), img.shape[0])
             loss_base_meter.update(loss_base.item(), img.shape[0])
-            loss_cyc_meter.update(loss_cyc.item(), img.shape[0])
-            loss_topo_meter.update(loss_topo.item(), img.shape[0])
             acc_meter.update(acc, 1)
 
             torch.cuda.synchronize()
@@ -236,10 +206,7 @@ def do_train(
         if not cfg.MODEL.DIST_TRAIN or dist.get_rank() == 0:
             log_msg = f"Epoch {epoch} done. "
 
-            log_msg += "\n   Stats: Acc: {:.2%}, Total Loss: {:.4f}, Base Loss: {:.4f}".format(acc_meter.avg, loss_meter.avg, loss_base_meter.avg)
-
-            if cfg.MODEL.USE_CMT:
-                log_msg += ", Cyc Loss: {:.4f}, Topo Loss: {:.4f}".format(loss_cyc_meter.avg, loss_topo_meter.avg)
+            log_msg += " Stats: Acc: {:.2%}, Total Loss: {:.4f}, Base Loss: {:.4f}".format(acc_meter.avg, loss_meter.avg, loss_base_meter.avg)
 
             logger.info(log_msg)
 
