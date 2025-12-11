@@ -46,9 +46,14 @@ def _pad_to_largest_tensor(tensor, group):
         Tensor: padded tensor that has the max size
     """
     world_size = dist.get_world_size(group=group)
-    assert world_size >= 1, "comm.gather/all_gather must be called from ranks within the given group!"
+    assert (
+        world_size >= 1
+    ), "comm.gather/all_gather must be called from ranks within the given group!"
     local_size = torch.tensor([tensor.numel()], dtype=torch.int64, device=tensor.device)
-    size_list = [torch.zeros([1], dtype=torch.int64, device=tensor.device) for _ in range(world_size)]
+    size_list = [
+        torch.zeros([1], dtype=torch.int64, device=tensor.device)
+        for _ in range(world_size)
+    ]
     dist.all_gather(size_list, local_size, group=group)
     size_list = [int(size.item()) for size in size_list]
 
@@ -57,7 +62,9 @@ def _pad_to_largest_tensor(tensor, group):
     # we pad the tensor because torch all_gather does not support
     # gathering tensors of different shapes
     if local_size != max_size:
-        padding = torch.zeros((max_size - local_size,), dtype=torch.uint8, device=tensor.device)
+        padding = torch.zeros(
+            (max_size - local_size,), dtype=torch.uint8, device=tensor.device
+        )
         tensor = torch.cat((tensor, padding), dim=0)
     return size_list, tensor
 
@@ -85,7 +92,10 @@ def all_gather(data, group=None):
     max_size = max(size_list)
 
     # receiving Tensor from all ranks
-    tensor_list = [torch.empty((max_size,), dtype=torch.uint8, device=tensor.device) for _ in size_list]
+    tensor_list = [
+        torch.empty((max_size,), dtype=torch.uint8, device=tensor.device)
+        for _ in size_list
+    ]
     dist.all_gather(tensor_list, tensor, group=group)
 
     data_list = []
@@ -163,7 +173,10 @@ class RandomIdentitySampler_DDP(Sampler):
         for i in range(0, block_num * self.world_size, self.world_size):
             index = range(
                 self.mini_batch_size * self.rank + self.mini_batch_size * i,
-                min(self.mini_batch_size * self.rank + self.mini_batch_size * (i + 1), total_num),
+                min(
+                    self.mini_batch_size * self.rank + self.mini_batch_size * (i + 1),
+                    total_num,
+                ),
             )
             index_target.extend(index)
         index_target_npy = np.array(index_target)
@@ -177,12 +190,16 @@ class RandomIdentitySampler_DDP(Sampler):
 
         batch_indices = []
         while len(avai_pids) >= self.num_pids_per_batch:
-            selected_pids = np.random.choice(avai_pids, self.num_pids_per_batch, replace=False).tolist()
+            selected_pids = np.random.choice(
+                avai_pids, self.num_pids_per_batch, replace=False
+            ).tolist()
             for pid in selected_pids:
                 if pid not in batch_idxs_dict:
                     idxs = copy.deepcopy(self.index_dic[pid])
                     if len(idxs) < self.num_instances:
-                        idxs = np.random.choice(idxs, size=self.num_instances, replace=True).tolist()
+                        idxs = np.random.choice(
+                            idxs, size=self.num_instances, replace=True
+                        ).tolist()
                     np.random.shuffle(idxs)
                     batch_idxs_dict[pid] = idxs
 

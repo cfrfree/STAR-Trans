@@ -1,6 +1,6 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
-  PRETRAIN_PATH: 'weights/vit_base_p16_224-4e355ebd.pth' # https://github.com/huggingface/pytorch-image-models/releases/download/v0.1-weights/vit_base_p16_224-4e355ebd.pth
+  PRETRAIN_PATH: "/home/share/chenfree/ReID/vit_base_p16_224-4e355ebd.pth"
   NAME: 'transformer'
   NO_MARGIN: True
   DEVICE_ID: ('0')
@@ -22,18 +22,18 @@ INPUT:
 
 DATASETS:
   NAMES: ('Pretrain')
-  ROOT_DIR: ('./data')
+  ROOT_DIR: ('/home/share/chenfree/ReID/')
 
 DATALOADER:
   SAMPLER: 'softmax_triplet'
   NUM_INSTANCE: 4
-  NUM_WORKERS: 8
+  NUM_WORKERS: 4
 
 SOLVER:
-  OPTIMIZER_NAME: 'SGD'
+  OPTIMIZER_NAME: 'AdamW'
   MAX_EPOCHS: 60
   BASE_LR: 0.003
-  IMS_PER_BATCH: 512
+  IMS_PER_BATCH: 256
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
   CHECKPOINT_PERIOD: 5
@@ -51,4 +51,4 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
-OUTPUT_DIR: './logs/pretrain_transoss'
+OUTPUT_DIR: './logs/pretrain_transoss_AdamW'

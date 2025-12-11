@@ -26,8 +26,18 @@ def set_seed(seed):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="TransOSS Training")
-    parser.add_argument("--config_file", default="configs/hoss_transoss.yml", help="path to config file", type=str)
-    parser.add_argument("opts", help="Modify config options using the command-line", default=None, nargs=argparse.REMAINDER)
+    parser.add_argument(
+        "--config_file",
+        default="configs/hoss_transoss.yml",
+        help="path to config file",
+        type=str,
+    )
+    parser.add_argument(
+        "opts",
+        help="Modify config options using the command-line",
+        default=None,
+        nargs=argparse.REMAINDER,
+    )
     parser.add_argument("--local-rank", default=0, type=int)
     args = parser.parse_args()
 
@@ -60,7 +70,14 @@ if __name__ == "__main__":
         torch.distributed.init_process_group(backend="nccl", init_method="env://")
 
     os.environ["CUDA_VISIBLE_DEVICES"] = cfg.MODEL.DEVICE_ID
-    train_loader, train_loader_normal, val_loader, num_query, num_classes, camera_num = make_dataloader(cfg)
+    (
+        train_loader,
+        train_loader_normal,
+        val_loader,
+        num_query,
+        num_classes,
+        camera_num,
+    ) = make_dataloader(cfg)
 
     model = make_model(cfg, num_class=num_classes, camera_num=camera_num)
 
@@ -70,4 +87,16 @@ if __name__ == "__main__":
 
     scheduler = create_scheduler(cfg, optimizer)
 
-    do_train(cfg, model, center_criterion, train_loader, val_loader, optimizer, optimizer_center, scheduler, loss_func, num_query, args.local_rank)
+    do_train(
+        cfg,
+        model,
+        center_criterion,
+        train_loader,
+        val_loader,
+        optimizer,
+        optimizer_center,
+        scheduler,
+        loss_func,
+        num_query,
+        args.local_rank,
+    )

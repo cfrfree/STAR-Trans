@@ -19,7 +19,11 @@ def read_image(img_path):
             img = Image.open(img_path)
             got_img = True
         except IOError:
-            print("IOError incurred when reading '{}'. Will redo. Don't worry. Just chill.".format(img_path))
+            print(
+                "IOError incurred when reading '{}'. Will redo. Don't worry. Just chill.".format(
+                    img_path
+                )
+            )
             pass
     return img
 
@@ -64,18 +68,36 @@ class BaseImageDataset(BaseDataset):
 
     def print_dataset_statistics(self, train, query, gallery):
         if train is not None:
-            num_train_pids, num_train_imgs, num_train_cams, num_train_views = self.get_imagedata_info(train)
-        num_query_pids, num_query_imgs, num_query_cams, num_train_views = self.get_imagedata_info(query)
-        num_gallery_pids, num_gallery_imgs, num_gallery_cams, num_train_views = self.get_imagedata_info(gallery)
+            num_train_pids, num_train_imgs, num_train_cams, num_train_views = (
+                self.get_imagedata_info(train)
+            )
+        num_query_pids, num_query_imgs, num_query_cams, num_train_views = (
+            self.get_imagedata_info(query)
+        )
+        num_gallery_pids, num_gallery_imgs, num_gallery_cams, num_train_views = (
+            self.get_imagedata_info(gallery)
+        )
 
         print("Dataset statistics:")
         print("  ----------------------------------------")
         print("  subset   | # ids | # images | # cameras")
         print("  ----------------------------------------")
         if train is not None:
-            print("  train    | {:5d} | {:8d} | {:9d}".format(num_train_pids, num_train_imgs, num_train_cams))
-        print("  query    | {:5d} | {:8d} | {:9d}".format(num_query_pids, num_query_imgs, num_query_cams))
-        print("  gallery  | {:5d} | {:8d} | {:9d}".format(num_gallery_pids, num_gallery_imgs, num_gallery_cams))
+            print(
+                "  train    | {:5d} | {:8d} | {:9d}".format(
+                    num_train_pids, num_train_imgs, num_train_cams
+                )
+            )
+        print(
+            "  query    | {:5d} | {:8d} | {:9d}".format(
+                num_query_pids, num_query_imgs, num_query_cams
+            )
+        )
+        print(
+            "  gallery  | {:5d} | {:8d} | {:9d}".format(
+                num_gallery_pids, num_gallery_imgs, num_gallery_cams
+            )
+        )
         print("  ----------------------------------------")
 
 
@@ -98,7 +120,11 @@ class ImageDataset(Dataset):
             img = read_image(img_path).convert("RGB")
             img_size = img.size
             img_size = [img_size[0] * 0.75, img_size[1] * 0.75]
-        img_size = ((img_size[0] / 93 - 0.434) / 0.031, (img_size[1] / 427 - 0.461) / 0.031, img_size[1] / img_size[0])
+        img_size = (
+            (img_size[0] / 93 - 0.434) / 0.031,
+            (img_size[1] / 427 - 0.461) / 0.031,
+            img_size[1] / img_size[0],
+        )
         if self.transform is not None:
             img = self.transform(img)
         return img, img_size

@@ -17,7 +17,9 @@ class Pretrain(BaseImageDataset):
         self.train_dir = self.dataset_dir
         self.pid_begin = pid_begin
 
-        train, train_pair, self.pid_begin = self._process_dir_train(self.train_dir, relabel=True)
+        train, train_pair, self.pid_begin = self._process_dir_train(
+            self.train_dir, relabel=True
+        )
 
         if verbose:
             print("=> Pretrain Dataset loaded")
@@ -28,7 +30,9 @@ class Pretrain(BaseImageDataset):
         self.train = train
         self.train_pair = train_pair
 
-        self.num_train_pair_pids, self.num_train_pair_imgs, self.num_train_pair_cams = self.get_imagedata_info_pair(self.train_pair)
+        self.num_train_pair_pids, self.num_train_pair_imgs, self.num_train_pair_cams = (
+            self.get_imagedata_info_pair(self.train_pair)
+        )
 
     def get_imagedata_info_pair(self, data):
         pids, cams = [], []
@@ -46,7 +50,9 @@ class Pretrain(BaseImageDataset):
     def _process_dir_train(self, dir_path, relabel=False):
         img_paths = glob.glob(osp.join(dir_path, "*/*"))
 
-        RGB_paths = [i for i in img_paths if i.endswith("RGB.tif") or i.endswith("RGB.png")]
+        RGB_paths = [
+            i for i in img_paths if i.endswith("RGB.tif") or i.endswith("RGB.png")
+        ]
         pid2sar = {}
 
         pid_container = set()
@@ -64,7 +70,11 @@ class Pretrain(BaseImageDataset):
         for img_path in sorted(img_paths):
             pid = int(img_path.split("/")[-1].split("_")[1])
             # camid 0 for RGB, 1 for SAR
-            camid = 0 if img_path.split("/")[-1].split("_")[-1].split(".")[0] == "RGB" else 1
+            camid = (
+                0
+                if img_path.split("/")[-1].split("_")[-1].split(".")[0] == "RGB"
+                else 1
+            )
             if relabel:
                 pid = pid2label[pid]
             dataset.append((img_path, self.pid_begin + pid, camid))
@@ -75,7 +85,12 @@ class Pretrain(BaseImageDataset):
             if pid not in pid2sar.keys():
                 continue
             for sar_path in pid2sar[pid]:
-                dataset_pair.append([(img_path, self.pid_begin + pid, 0), (sar_path, self.pid_begin + pid, 1)])
+                dataset_pair.append(
+                    [
+                        (img_path, self.pid_begin + pid, 0),
+                        (sar_path, self.pid_begin + pid, 1),
+                    ]
+                )
 
         max_pid = max(pid_container)
 

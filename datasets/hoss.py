@@ -8,14 +8,15 @@ class HOSS(BaseImageDataset):
     """
     HOSS dataset
     """
-    dataset_dir = 'HOSS'
 
-    def __init__(self, root='', verbose=True, pid_begin = 0, **kwargs):
+    dataset_dir = "HOSS"
+
+    def __init__(self, root="", verbose=True, pid_begin=0, **kwargs):
         super(HOSS, self).__init__()
         self.dataset_dir = osp.join(root, self.dataset_dir)
-        self.train_dir = osp.join(self.dataset_dir, 'bounding_box_train')
-        self.query_dir = osp.join(self.dataset_dir, 'query')
-        self.gallery_dir = osp.join(self.dataset_dir, 'bounding_box_test')
+        self.train_dir = osp.join(self.dataset_dir, "bounding_box_train")
+        self.query_dir = osp.join(self.dataset_dir, "query")
+        self.gallery_dir = osp.join(self.dataset_dir, "bounding_box_test")
 
         self._check_before_run()
         self.pid_begin = pid_begin
@@ -35,10 +36,30 @@ class HOSS(BaseImageDataset):
         self.query = query
         self.gallery = gallery
 
-        self.num_train_pids, self.num_train_imgs, self.num_train_cams, self.num_train_vids = self.get_imagedata_info(self.train)
-        self.num_train_pair_pids, self.num_train_pair_imgs, self.num_train_pair_cams, self.num_train_pair_vids = self.get_imagedata_info_pair(self.train_pair)
-        self.num_query_pids, self.num_query_imgs, self.num_query_cams, self.num_query_vids = self.get_imagedata_info(self.query)
-        self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams, self.num_gallery_vids = self.get_imagedata_info(self.gallery)
+        (
+            self.num_train_pids,
+            self.num_train_imgs,
+            self.num_train_cams,
+            self.num_train_vids,
+        ) = self.get_imagedata_info(self.train)
+        (
+            self.num_train_pair_pids,
+            self.num_train_pair_imgs,
+            self.num_train_pair_cams,
+            self.num_train_pair_vids,
+        ) = self.get_imagedata_info_pair(self.train_pair)
+        (
+            self.num_query_pids,
+            self.num_query_imgs,
+            self.num_query_cams,
+            self.num_query_vids,
+        ) = self.get_imagedata_info(self.query)
+        (
+            self.num_gallery_pids,
+            self.num_gallery_imgs,
+            self.num_gallery_cams,
+            self.num_gallery_vids,
+        ) = self.get_imagedata_info(self.gallery)
 
     def get_imagedata_info_pair(self, data):
         pids, cams, tracks = [], [], []
@@ -69,34 +90,35 @@ class HOSS(BaseImageDataset):
             raise RuntimeError("'{}' is not available".format(self.gallery_dir))
 
     def _process_dir(self, dir_path, relabel=False):
-        img_paths = glob.glob(osp.join(dir_path, '*.tif'))
+        img_paths = glob.glob(osp.join(dir_path, "*.tif"))
 
         pid_container = set()
         for img_path in sorted(img_paths):
-            pid = int(img_path.split('/')[-1].split('_')[0])
+            pid = int(img_path.split("/")[-1].split("_")[0])
             pid_container.add(pid)
         pid2label = {pid: label for label, pid in enumerate(pid_container)}
         dataset = []
         for img_path in sorted(img_paths):
-            pid = int(img_path.split('/')[-1].split('_')[0])
+            pid = int(img_path.split("/")[-1].split("_")[0])
             # camid 0 for RGB, 1 for SAR
-            camid = 0 if img_path.split('/')[-1].split('_')[-1] == 'RGB.tif' else 1
-            if relabel: pid = pid2label[pid]
+            camid = 0 if img_path.split("/")[-1].split("_")[-1] == "RGB.tif" else 1
+            if relabel:
+                pid = pid2label[pid]
 
             dataset.append((img_path, self.pid_begin + pid, camid, 1))
         return dataset
 
     def _process_dir_train(self, dir_path, relabel=False):
-        img_paths = glob.glob(osp.join(dir_path, '*.tif'))
+        img_paths = glob.glob(osp.join(dir_path, "*.tif"))
 
-        RGB_paths = [i for i in img_paths if i.endswith('RGB.tif')]
+        RGB_paths = [i for i in img_paths if i.endswith("RGB.tif")]
         pid2sar = {}
 
         pid_container = set()
         for img_path in sorted(img_paths):
-            pid = int(img_path.split('/')[-1].split('_')[0])
+            pid = int(img_path.split("/")[-1].split("_")[0])
             pid_container.add(pid)
-            if img_path.endswith('SAR.tif'):
+            if img_path.endswith("SAR.tif"):
                 if pid not in pid2sar:
                     pid2sar[pid] = [img_path]
                 else:
@@ -105,19 +127,24 @@ class HOSS(BaseImageDataset):
 
         dataset = []
         for img_path in sorted(img_paths):
-            pid = int(img_path.split('/')[-1].split('_')[0])
+            pid = int(img_path.split("/")[-1].split("_")[0])
             # camid 0 for RGB, 1 for SAR
-            camid = 0 if img_path.split('/')[-1].split('_')[-1] == 'RGB.tif' else 1
-            if relabel: pid = pid2label[pid]
+            camid = 0 if img_path.split("/")[-1].split("_")[-1] == "RGB.tif" else 1
+            if relabel:
+                pid = pid2label[pid]
             dataset.append((img_path, self.pid_begin + pid, camid, 1))
 
         dataset_pair = []
         for img_path in sorted(RGB_paths):
-            pid = int(img_path.split('/')[-1].split('_')[0])
+            pid = int(img_path.split("/")[-1].split("_")[0])
             if pid not in pid2sar.keys():
                 continue
             for sar_path in pid2sar[pid]:
-                dataset_pair.append([(img_path, self.pid_begin + pid, 0, 1),
-                                     (sar_path, self.pid_begin + pid, 1, 1)])
+                dataset_pair.append(
+                    [
+                        (img_path, self.pid_begin + pid, 0, 1),
+                        (sar_path, self.pid_begin + pid, 1, 1),
+                    ]
+                )
 
         return dataset, dataset_pair

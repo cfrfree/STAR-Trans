@@ -9,8 +9,18 @@ from utils.logger import setup_logger
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="TransOSS Testing")
-    parser.add_argument("--config_file", default="configs/HOSS/hoss_transoss.yml", help="path to config file", type=str)
-    parser.add_argument("opts", help="Modify config options using the command-line", default=None, nargs=argparse.REMAINDER)
+    parser.add_argument(
+        "--config_file",
+        default="configs/HOSS/hoss_transoss.yml",
+        help="path to config file",
+        type=str,
+    )
+    parser.add_argument(
+        "opts",
+        help="Modify config options using the command-line",
+        default=None,
+        nargs=argparse.REMAINDER,
+    )
 
     args = parser.parse_args()
 
@@ -35,7 +45,15 @@ if __name__ == "__main__":
 
     os.environ["CUDA_VISIBLE_DEVICES"] = cfg.MODEL.DEVICE_ID
 
-    train_loader, train_loader_normal, _, val_loader, num_query, num_classes, camera_num = make_dataloader(cfg)
+    (
+        train_loader,
+        train_loader_normal,
+        _,
+        val_loader,
+        num_query,
+        num_classes,
+        camera_num,
+    ) = make_dataloader(cfg)
 
     model = make_model(cfg, num_class=num_classes, camera_num=camera_num)
     model.load_param(cfg.TEST.WEIGHT)

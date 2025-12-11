@@ -1,6 +1,7 @@
 MODEL:
-  PRETRAIN_CHOICE: 'imagenet' # If you are using pre-trained raw weights, such as those named ‘transformer_60.pth’, set this option to ‘clip’.
-  PRETRAIN_PATH: 'weights/vit_b512_pre.pth'
+  PRETRAIN_CHOICE: 'clip' # If you are using pre-trained raw weights, such as those named ‘transformer_60.pth’, set this option to ‘clip’.
+  # PRETRAIN_PATH: '/home/share/chenfree/ReID/vit_b512_pre.pth'
+  PRETRAIN_PATH: logs/pretrain_transoss_AdamW/transformer_60.pth
   METRIC_LOSS_TYPE: 'triplet'
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
@@ -13,6 +14,10 @@ MODEL:
   MIE_COE: 3.0
   SSE: True
   PAIR: False
+  USE_CMT: False
+  CMT_NUM_PARTS: 2
+  CYC_LOSS_WEIGHT: 0.1
+  TOPO_LOSS_WEIGHT: 0.1 
 
 INPUT:
   SIZE_TRAIN: [256, 128]
@@ -25,12 +30,12 @@ INPUT:
 
 DATASETS:
   NAMES: ('HOSS')
-  ROOT_DIR: ('../dataset')
+  ROOT_DIR: ('/home/share/chenfree/ReID/')
 
 DATALOADER:
   SAMPLER: 'softmax_triplet'
   NUM_INSTANCE: 4
-  NUM_WORKERS: 8
+  NUM_WORKERS: 4
 
 SOLVER:
   OPTIMIZER_NAME: 'SGD'
@@ -40,7 +45,7 @@ SOLVER:
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
   CHECKPOINT_PERIOD: 10
-  LOG_PERIOD: 80
+  LOG_PERIOD: 50
   EVAL_PERIOD: 10
   WEIGHT_DECAY:  1e-4
   WEIGHT_DECAY_BIAS: 1e-4
@@ -54,4 +59,4 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
-OUTPUT_DIR: './logs/hoss_transoss'
+OUTPUT_DIR: './logs/tmp'
