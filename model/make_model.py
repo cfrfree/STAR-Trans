@@ -65,9 +65,7 @@ class Backbone(nn.Module):
 
         if model_name == "resnet50":
             self.in_planes = 2048
-            self.base = ResNet(
-                last_stride=last_stride, block=Bottleneck, layers=[3, 4, 6, 3]
-            )
+            self.base = ResNet(last_stride=last_stride, block=Bottleneck, layers=[3, 4, 6, 3])
             print("using resnet50 as a backbone")
         else:
             print("unsupported backbone! but got {}".format(model_name))
@@ -88,9 +86,7 @@ class Backbone(nn.Module):
     def forward(self, x, label=None):  # label is unused if self.cos_layer == 'no'
         x = self.base(x)
         global_feat = nn.functional.avg_pool2d(x, x.shape[2:4])
-        global_feat = global_feat.view(
-            global_feat.shape[0], -1
-        )  # flatten to (bs, 2048)
+        global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
         if self.neck == "no":
             feat = global_feat
@@ -125,9 +121,7 @@ class Backbone(nn.Module):
 
 
 class build_transformer(nn.Module):
-    def __init__(
-        self, num_classes, camera_num, cfg, factory, logit_scale_init_value=2.6592
-    ):
+    def __init__(self, num_classes, camera_num, cfg, factory, logit_scale_init_value=2.6592):
         super(build_transformer, self).__init__()
         last_stride = cfg.MODEL.LAST_STRIDE
         model_path = cfg.MODEL.PRETRAIN_PATH
@@ -139,11 +133,7 @@ class build_transformer(nn.Module):
         self.in_planes = 768
         self.model_type = cfg.MODEL.TRANSFORMER_TYPE
 
-        print(
-            "using Transformer_type: {} as a backbone".format(
-                cfg.MODEL.TRANSFORMER_TYPE
-            )
-        )
+        print("using Transformer_type: {} as a backbone".format(cfg.MODEL.TRANSFORMER_TYPE))
 
         if cfg.MODEL.MIE:
             camera_num = camera_num
@@ -159,20 +149,16 @@ class build_transformer(nn.Module):
                 drop_rate=cfg.MODEL.DROP_OUT,
                 attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
                 sse=cfg.MODEL.SSE,
+                use_cmt=cfg.MODEL.USE_CMT,
+                cmt_num_parts=cfg.MODEL.CMT_NUM_PARTS,
             )
         else:
-            raise ValueError(
-                "Unsupported model type: {}".format(cfg.MODEL.TRANSFORMER_TYPE)
-            )
+            raise ValueError("Unsupported model type: {}".format(cfg.MODEL.TRANSFORMER_TYPE))
 
         self.num_classes = num_classes
         self.ID_LOSS_TYPE = cfg.MODEL.ID_LOSS_TYPE
         if self.ID_LOSS_TYPE == "arcface":
-            print(
-                "using {} with s:{}, m: {}".format(
-                    self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN
-                )
-            )
+            print("using {} with s:{}, m: {}".format(self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN))
             self.classifier = Arcface(
                 self.in_planes,
                 self.num_classes,
@@ -180,11 +166,7 @@ class build_transformer(nn.Module):
                 m=cfg.SOLVER.COSINE_MARGIN,
             )
         elif self.ID_LOSS_TYPE == "cosface":
-            print(
-                "using {} with s:{}, m: {}".format(
-                    self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN
-                )
-            )
+            print("using {} with s:{}, m: {}".format(self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN))
             self.classifier = Cosface(
                 self.in_planes,
                 self.num_classes,
@@ -192,11 +174,7 @@ class build_transformer(nn.Module):
                 m=cfg.SOLVER.COSINE_MARGIN,
             )
         elif self.ID_LOSS_TYPE == "amsoftmax":
-            print(
-                "using {} with s:{}, m: {}".format(
-                    self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN
-                )
-            )
+            print("using {} with s:{}, m: {}".format(self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN))
             self.classifier = AMSoftmax(
                 self.in_planes,
                 self.num_classes,
@@ -204,11 +182,7 @@ class build_transformer(nn.Module):
                 m=cfg.SOLVER.COSINE_MARGIN,
             )
         elif self.ID_LOSS_TYPE == "circle":
-            print(
-                "using {} with s:{}, m: {}".format(
-                    self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN
-                )
-            )
+            print("using {} with s:{}, m: {}".format(self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN))
             self.classifier = CircleLoss(
                 self.in_planes,
                 self.num_classes,
@@ -249,6 +223,8 @@ class build_transformer(nn.Module):
 
     def forward(self, x, label=None, cam_label=None, img_wh=None):
         global_feat = self.base(x, cam_label=cam_label, img_wh=img_wh)
+        if self.training and isinstance(global_feat, tuple):
+            return global_feat
         if self.training:
             if self.train_pair:
                 b_s = global_feat.size(0)
@@ -262,7 +238,6 @@ class build_transformer(nn.Module):
                 logit_scale = self.logit_scale.exp()
                 logits_per_sar = torch.matmul(sar_embeds, opt_embeds.t()) * logit_scale
                 return logits_per_sar
-
             else:
                 feat = self.bottleneck(global_feat)
                 if self.ID_LOSS_TYPE in ("arcface", "cosface", "amsoftmax", "circle"):

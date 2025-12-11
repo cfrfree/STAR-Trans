@@ -27,9 +27,7 @@ def do_train_pair(cfg, model, train_loader_pair, optimizer, scheduler, local_ran
         model.to(local_rank)
         if torch.cuda.device_count() > 1 and cfg.MODEL.DIST_TRAIN:
             print("Using {} GPUs for training".format(torch.cuda.device_count()))
-            model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[local_rank], find_unused_parameters=True
-            )
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], find_unused_parameters=True)
 
     loss_meter = AverageMeter()
     scaler = amp.GradScaler()
@@ -91,9 +89,7 @@ def do_train_pair(cfg, model, train_loader_pair, optimizer, scheduler, local_ran
                 if not cfg.MODEL.DIST_TRAIN or dist.get_rank() == 0:
                     torch.save(
                         model.state_dict(),
-                        os.path.join(
-                            cfg.OUTPUT_DIR, cfg.MODEL.NAME + "_{}.pth".format(epoch)
-                        ),
+                        os.path.join(cfg.OUTPUT_DIR, cfg.MODEL.NAME + "_{}.pth".format(epoch)),
                     )
 
 
@@ -132,17 +128,13 @@ def do_train(
         model.to(local_rank)
         if torch.cuda.device_count() > 1 and cfg.MODEL.DIST_TRAIN:
             print("Using {} GPUs for training".format(torch.cuda.device_count()))
-            model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[local_rank], find_unused_parameters=True
-            )
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], find_unused_parameters=True)
 
-    # === 1. 初始化所有 Meter ===
-    loss_meter = AverageMeter()  # 总 Loss
-    acc_meter = AverageMeter()  # 准确率
-    loss_base_meter = AverageMeter()  # 基础分类/三元组 Loss
-    loss_cyc_meter = AverageMeter()  # 循环一致性 Loss
-    loss_topo_meter = AverageMeter()  # 拓扑一致性 Loss
-    # =========================
+    loss_meter = AverageMeter()
+    acc_meter = AverageMeter()
+    loss_base_meter = AverageMeter()
+    loss_cyc_meter = AverageMeter()
+    loss_topo_meter = AverageMeter()
 
     evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)
     scaler = amp.GradScaler()
@@ -156,21 +148,17 @@ def do_train(
     for epoch in range(1, epochs + 1):
         start_time = time.time()
 
-        # === 2. 每个 Epoch 重置所有 Meter ===
         loss_meter.reset()
         acc_meter.reset()
         loss_base_meter.reset()
         loss_cyc_meter.reset()
         loss_topo_meter.reset()
-        # ==================================
 
         evaluator.reset()
         scheduler.step(epoch)
         model.train()
 
-        for n_iter, (img, vid, target_cam, target_view, img_wh) in enumerate(
-            train_loader
-        ):
+        for n_iter, (img, vid, target_cam, target_view, img_wh) in enumerate(train_loader):
             optimizer.zero_grad()
             optimizer_center.zero_grad()
             img = img.to(device)
@@ -181,12 +169,10 @@ def do_train(
             with amp.autocast(enabled=True):
                 outputs = model(img, target, cam_label=target_cam, img_wh=img_wh)
 
-                # 初始化分项 loss 为 0，确保变量存在
                 loss_cyc = torch.tensor(0.0).to(device)
                 loss_topo = torch.tensor(0.0).to(device)
                 loss_base = torch.tensor(0.0).to(device)
 
-                # 分支 1: 使用 CMT (返回5个值)
                 if isinstance(outputs, tuple) and len(outputs) == 5:
                     f_final, f_comp, cls_score, saliency, attn_map = outputs
 
@@ -205,13 +191,8 @@ def do_train(
                     if attn_map is not None:
                         loss_topo = topo_loss_fn(attn_map)
 
-                    loss = (
-                        loss_base
-                        + cfg.MODEL.CYC_LOSS_WEIGHT * loss_cyc
-                        + cfg.MODEL.TOPO_LOSS_WEIGHT * loss_topo
-                    )
+                    loss = loss_base + cfg.MODEL.CYC_LOSS_WEIGHT * loss_cyc + cfg.MODEL.TOPO_LOSS_WEIGHT * loss_topo
 
-                # 分支 2: Baseline (返回2个值)
                 else:
                     cls_score, feat = outputs
                     loss_base = loss_fn(cls_score, feat, target, target_cam)
@@ -232,13 +213,11 @@ def do_train(
             else:
                 acc = (cls_score.max(1)[1] == target).float().mean()
 
-            # === 3. 更新所有 Meter ===
             loss_meter.update(loss.item(), img.shape[0])
             loss_base_meter.update(loss_base.item(), img.shape[0])
             loss_cyc_meter.update(loss_cyc.item(), img.shape[0])
             loss_topo_meter.update(loss_topo.item(), img.shape[0])
             acc_meter.update(acc, 1)
-            # =======================
 
             torch.cuda.synchronize()
             if (n_iter + 1) % log_period == 0:
@@ -254,36 +233,21 @@ def do_train(
                         )
                     )
 
-        # === 4. Epoch 结束时打印详细 Loss ===
-        # 仅在主进程打印，避免多卡重复刷屏
         if not cfg.MODEL.DIST_TRAIN or dist.get_rank() == 0:
-            # 构建基础日志
             log_msg = f"Epoch {epoch} done. "
 
-            # 添加 Loss 信息
-            log_msg += (
-                "\n   Stats: Acc: {:.2%}, Total Loss: {:.4f}, Base Loss: {:.4f}".format(
-                    acc_meter.avg, loss_meter.avg, loss_base_meter.avg
-                )
-            )
+            log_msg += "\n   Stats: Acc: {:.2%}, Total Loss: {:.4f}, Base Loss: {:.4f}".format(acc_meter.avg, loss_meter.avg, loss_base_meter.avg)
 
-            # 如果启用了 CMT，则追加 Cyc 和 Topo Loss
-            # 通过配置判断是否打印
             if cfg.MODEL.USE_CMT:
-                log_msg += ", Cyc Loss: {:.4f}, Topo Loss: {:.4f}".format(
-                    loss_cyc_meter.avg, loss_topo_meter.avg
-                )
+                log_msg += ", Cyc Loss: {:.4f}, Topo Loss: {:.4f}".format(loss_cyc_meter.avg, loss_topo_meter.avg)
 
             logger.info(log_msg)
-        # ================================
 
         if epoch % checkpoint_period == 0:
             if not cfg.MODEL.DIST_TRAIN or dist.get_rank() == 0:
                 torch.save(
                     model.state_dict(),
-                    os.path.join(
-                        cfg.OUTPUT_DIR, cfg.MODEL.NAME + "_{}.pth".format(epoch)
-                    ),
+                    os.path.join(cfg.OUTPUT_DIR, cfg.MODEL.NAME + "_{}.pth".format(epoch)),
                 )
 
         if epoch % eval_period == 0:
@@ -331,9 +295,7 @@ def do_inference(cfg, model, val_loader, num_query):
     model.eval()
     img_path_list = []
 
-    for n_iter, (img, pid, camid, camids, target_view, imgpath, img_wh) in enumerate(
-        val_loader
-    ):
+    for n_iter, (img, pid, camid, camids, target_view, imgpath, img_wh) in enumerate(val_loader):
         with torch.no_grad():
             img = img.to(device)
             camids = camids.to(device)

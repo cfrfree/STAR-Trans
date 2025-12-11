@@ -1,7 +1,7 @@
 MODEL:
-  PRETRAIN_CHOICE: 'clip' # If you are using pre-trained raw weights, such as those named ‘transformer_60.pth’, set this option to ‘clip’.
-  # PRETRAIN_PATH: '/home/share/chenfree/ReID/vit_b512_pre.pth'
-  PRETRAIN_PATH: logs/pretrain_transoss_AdamW/transformer_60.pth
+  PRETRAIN_CHOICE: 'imagenet' # If you are using pre-trained raw weights, such as those named ‘transformer_60.pth’, set this option to ‘clip’.
+  PRETRAIN_PATH: '/home/share/chenfree/ReID/vit_b512_pre.pth'
+  # PRETRAIN_PATH: logs/pretrain_transoss_AdamW/transformer_60.pth
   METRIC_LOSS_TYPE: 'triplet'
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
@@ -59,4 +59,4 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
-OUTPUT_DIR: './logs/tmp'
+OUTPUT_DIR: './logs/StarTrans'
